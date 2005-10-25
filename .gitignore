@@ -14,7 +14,16 @@ aclocal.m4
 configure
 *.tar.gz
 push
+librngd.a
+rng-tools-config.h*
+rng-tools-config.h.in
+rngd
+rngd.8
+rngtest
+rngtest.1
 
 .dotest
 autom4te.cache
 .deps
+
+
