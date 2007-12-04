@@ -105,7 +105,8 @@ char *dump_stat_counter(char *buf, int size,
 		       const char *msg, uint64_t value)
 {
 	buf[size-1] = 0;
-	snprintf(buf, size-1, "%s%s: %llu", stat_prefix, msg, value);
+	snprintf(buf, size-1, "%s%s: %llu", stat_prefix, msg,
+		 (unsigned long long) value);
 
 	return buf;
 }
@@ -120,7 +121,8 @@ char *dump_stat_stat(char *buf, int size,
 
 	buf[size-1] = 0;
 	snprintf(buf, size-1, "%s%s: (min=%llu; avg=%.3f; max=%llu)%s",
-		 stat_prefix, msg, stat->min, avg, stat->max, unit);
+		 stat_prefix, msg, (unsigned long long) stat->min, avg,
+		 (unsigned long long) stat->max, unit);
 
 	return buf;
 }

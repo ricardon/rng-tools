@@ -317,7 +317,8 @@ static void dump_rng_stats(void)
 
 	gettimeofday(&now, 0);
 	fprintf(stderr, "%sProgram run time: %llu microseconds\n",
-		logprefix, elapsed_time(&rng_stats.progstart, &now));
+		logprefix,
+		(unsigned long long) elapsed_time(&rng_stats.progstart, &now));
 }
 
 /* Return 32 bits of bootstrap data */
