@@ -111,8 +111,6 @@ struct arguments *arguments = &default_arguments;
  */
 static error_t parse_opt (int key, char *arg, struct argp_state *state)
 {
-	struct arguments *arguments = state->input;
-	
 	switch(key) {
 	case 'o':
 		arguments->random_name = arg;
