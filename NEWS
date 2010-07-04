@@ -1,4 +1,12 @@
 
+Version 3 (July 3, 2010):
+
+* add rngtest program
+* imported into git repository
+* support TPM chip's hardware RNG (and thus, a framework for supporting
+  multiple entropy sources)
+* change default hardware RNG device name to "/dev/hw_random"
+
 Version 2 (August 24, 2004):
 
 * Fixes and cleanups from Debian (Henrique de Moraes Holschuh)

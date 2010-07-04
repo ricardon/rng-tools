@@ -1,1 +1,12 @@
-No documentation is good documentation.
+
+This is a random number generator daemon.
+
+It monitors a hardware random number generator, and supplies entropy from that
+to the system /dev/random machinery.
+
+Home page:
+	http://sourceforge.net/projects/gkernel/
+
+GIT repository:
+	git://git.kernel.org/pub/scm/utils/kernel/rng-tools/rng-tools.git
+
