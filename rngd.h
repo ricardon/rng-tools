@@ -72,6 +72,6 @@ extern int am_daemon;			/* Nonzero if we went daemon */
 	} \
 } while (0)
 
-extern void list_add(struct rng *ent_src);
+extern void src_list_add(struct rng *ent_src);
 #endif /* RNGD__H */
 

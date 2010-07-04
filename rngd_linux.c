@@ -104,7 +104,7 @@ void random_sleep(double poll_timeout)
 	poll(&pfd, 1, 1000.0 * poll_timeout);
 }
 
-void list_add(struct rng *ent_src)
+void src_list_add(struct rng *ent_src)
 {
 	if (rng_list) {
 		struct rng *iter;

@@ -170,7 +170,7 @@ int init_entropy_source(struct rng *ent_src)
 	if (ent_src->rng_fd == -1) {
 		return 1;
 	}
-	list_add(ent_src);
+	src_list_add(ent_src);
 	/* Bootstrap FIPS tests */
 	ent_src->fipsctx = malloc(sizeof(fips_ctx_t));
 	fips_init(ent_src->fipsctx, discard_initial_data(ent_src));
@@ -186,7 +186,7 @@ int init_tpm_entropy_source(struct rng *ent_src)
 	if (ent_src->rng_fd == -1) {
 		return 1;
 	}
-	list_add(ent_src);
+	src_list_add(ent_src);
 	/* Bootstrap FIPS tests */
 	ent_src->fipsctx = malloc(sizeof(fips_ctx_t));
 	fips_init(ent_src->fipsctx, 0);
