@@ -81,7 +81,7 @@ static struct argp_option options[] = {
 	  "Kernel device used for random number output (default: /dev/random)" },
 
 	{ "rng-device", 'r', "file", 0,
-	  "Kernel device used for random number input (default: /dev/hwrandom)" },
+	  "Kernel device used for random number input (default: /dev/hw_random)" },
 
 	{ "random-step", 's', "nnn", 0,
 	  "Number of bytes written to random-device at a time (default: 64)" },
@@ -96,7 +96,7 @@ static struct argp_option options[] = {
 };
 
 static struct arguments default_arguments = {
-	.rng_name	= "/dev/hwrandom",
+	.rng_name	= "/dev/hw_random",
 	.random_name	= "/dev/random",
 	.poll_timeout	= 60,
 	.random_step	= 64,
