@@ -7,7 +7,7 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -45,8 +45,8 @@ void set_stat_prefix(const char* prefix)
 	strncpy(stat_prefix, prefix, sizeof(stat_prefix)-1);
 }
 
-static void scale_mult_unit(char *unit, int unitsize, 
-		       const char *baseunit, 
+static void scale_mult_unit(char *unit, int unitsize,
+		       const char *baseunit,
 		       double *value_min,
 		       double *value_avg,
 		       double *value_max)
@@ -54,7 +54,7 @@ static void scale_mult_unit(char *unit, int unitsize,
 	int mult = 0;
 	char multchar[] = "KMGTPE";
 
-	while ((*value_min >= 1024.0) && (*value_avg >= 1024.0) && 
+	while ((*value_min >= 1024.0) && (*value_avg >= 1024.0) &&
 	       (*value_max >= 1024.0) && (mult < sizeof(multchar))) {
 		mult++;
 		*value_min = *value_min / 1024.0;
@@ -128,8 +128,8 @@ char *dump_stat_stat(char *buf, int size,
 }
 
 char *dump_stat_bw(char *buf, int size,
-		  const char *msg, const char *unit, 
-		  struct rng_stat *stat, 
+		  const char *msg, const char *unit,
+		  struct rng_stat *stat,
 		  uint64_t blocksize)
 {
 	char unitscaled[20];

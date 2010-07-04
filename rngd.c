@@ -3,7 +3,7 @@
  *
  * rngd reads data from a hardware random number generator, verifies it
  * looks like random data, and adds it to /dev/random's entropy store.
- * 
+ *
  * In theory, this should allow you to read very quickly from
  * /dev/random; rngd also adds bytes to the entropy store periodically
  * when it's full, which makes predicting the entropy store's contents
@@ -15,7 +15,7 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -60,7 +60,7 @@
 int am_daemon;				/* Nonzero if we went daemon */
 
 /* Command line arguments and processing */
-const char *argp_program_version = 
+const char *argp_program_version =
 	"rngd " VERSION "\n"
 	"Copyright 2001-2004 Jeff Garzik\n"
 	"Copyright (c) 2001 by Philipp Rumpf\n"
@@ -91,20 +91,39 @@ static struct argp_option options[] = {
 
 	{ "timeout", 't', "nnn", 0,
 	  "Interval written to random-device when the entropy pool is full, in seconds (default: 60)" },
+	{ "no-tpm", 'n', "1|0", 0,
+	  "do not use tpm as a source of random number input (default: 0)" },
 
 	{ 0 },
 };
 
 static struct arguments default_arguments = {
-	.rng_name	= "/dev/hw_random",
 	.random_name	= "/dev/random",
 	.poll_timeout	= 60,
 	.random_step	= 64,
-	.fill_watermark = 2048,
+	.fill_watermark	= 2048,
 	.daemon		= 1,
+	.enable_tpm	= 1,
 };
 struct arguments *arguments = &default_arguments;
 
+static struct rng rng_default = {
+	.rng_name	= "/dev/hw_random",
+	.rng_fd		= -1,
+	.xread		= xread,
+	.fipsctx	= NULL,
+	.next		= NULL,
+};
+
+static struct rng rng_tpm = {
+	.rng_name	= "/dev/tpm0",
+	.rng_fd		= -1,
+	.xread		= xread_tpm,
+	.fipsctx	= NULL,
+	.next		= NULL,
+};
+
+struct rng *rng_list;
 
 /*
  * command line processing
@@ -116,7 +135,7 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 		arguments->random_name = arg;
 		break;
 	case 'r':
-		arguments->rng_name = arg;
+		rng_default.rng_name = arg;
 		break;
 	case 't': {
 		float f;
@@ -145,6 +164,14 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 			arguments->fill_watermark = n;
 		break;
 	}
+	case 'n': {
+		int n;
+		if ((sscanf(arg,"%i", &n) == 0) || ((n | 1)!=1))
+			argp_usage(state);
+		else
+			arguments->enable_tpm = 0;
+		break;
+	}
 
 	default:
 		return ARGP_ERR_UNKNOWN;
@@ -156,39 +183,64 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 static struct argp argp = { options, parse_opt, NULL, doc };
 
 
-static void do_loop(int random_step,
-		    double poll_timeout)
+static int update_kernel_random(int random_step, double poll_timeout,
+	unsigned char *buf, fips_ctx_t *fipsctx)
 {
-	unsigned char buf[FIPS_RNG_BUFFER_SIZE];
 	unsigned char *p;
 	int fips;
 
+	fips = fips_run_rng_test(fipsctx, buf);
+	if (fips) {
+		message(LOG_DAEMON|LOG_ERR, "failed fips test\n");
+		return 1;
+	}
+
+	for (p = buf; p + random_step <= &buf[FIPS_RNG_BUFFER_SIZE];
+		 p += random_step) {
+		random_add_entropy(p, random_step);
+		random_sleep(poll_timeout);
+	}
+	return 0;
+}
+
+static void do_loop(int random_step, double poll_timeout)
+{
+	unsigned char buf[FIPS_RNG_BUFFER_SIZE];
+	int retval;
+
 	for (;;) {
-		xread(buf, sizeof buf);
-
-		fips = fips_run_rng_test(&fipsctx, buf);
-
-		if (fips) {
-			message(LOG_DAEMON|LOG_ERR, "failed fips test\n");
-			sleep(1);
-			continue;
-		}
-
-		for (p = buf; p + random_step <= &buf[sizeof buf];
-		     p += random_step) {
-			random_add_entropy(p, random_step);
-			random_sleep(poll_timeout);
+		struct rng *iter;
+		for (iter = rng_list; iter; iter = iter->next)
+		{
+			retval = iter->xread(buf, sizeof buf, iter);
+			if (retval == 0)
+				update_kernel_random(random_step,
+						     poll_timeout, buf,
+						     iter->fipsctx);
 		}
 	}
 }
 
-
 int main(int argc, char **argv)
 {
+	int rc_rng = 1;
+	int rc_tpm = 1;
+
+	/* Parsing of commandline parameters */
 	argp_parse(&argp, argc, argv, 0, 0, arguments);
 
-	/* Init entropy source, and open TRNG device */
-	init_entropy_source(arguments->rng_name);
+	/* Init entropy sources, and open TRNG device */
+	rc_rng = init_entropy_source(&rng_default);
+	if (arguments->enable_tpm)
+		rc_tpm = init_tpm_entropy_source(&rng_tpm);
+
+	if (rc_rng && rc_tpm) {
+		message(LOG_DAEMON|LOG_ERR,
+			"can't open entropy source(tpm or intel/amd rng)");
+		message(LOG_DAEMON|LOG_ERR,
+			"Maybe RNG device modules are not loaded\n");
+		return 1;
+	}
 
 	/* Init entropy sink and open random device */
 	init_kernel_rng(arguments->random_name);

@@ -7,7 +7,7 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -35,15 +35,26 @@
 /* Command line arguments and processing */
 struct arguments {
 	char *random_name;
-	char *rng_name;
-	
+
 	int random_step;
 	int fill_watermark;
 	double poll_timeout;
 
 	int daemon;
+	int enable_tpm;
 };
 extern struct arguments *arguments;
+
+/* structures to store rng information */
+struct rng {
+	char *rng_name;
+	int rng_fd;
+
+	int (*xread) (void *buf, size_t size, struct rng *ent_src);
+	fips_ctx_t *fipsctx;
+
+	struct rng *next;
+};
 
 /* Background/daemon mode */
 extern int am_daemon;			/* Nonzero if we went daemon */
@@ -61,5 +72,6 @@ extern int am_daemon;			/* Nonzero if we went daemon */
 	} \
 } while (0)
 
+extern void list_add(struct rng *ent_src);
 #endif /* RNGD__H */
 

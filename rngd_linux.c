@@ -7,7 +7,7 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -48,6 +48,7 @@
 #include "exits.h"
 #include "rngd_linux.h"
 
+extern struct rng *rng_list;
 
 /* Kernel output device */
 static int random_fd;
@@ -80,7 +81,7 @@ void random_add_entropy(void *buf, size_t size)
 	entropy.ent_count = size * 8;
 	entropy.size = size;
 	memcpy(entropy.data, buf, size);
-	
+
 	if (ioctl(random_fd, RNDADDENTROPY, &entropy) != 0) {
 		message(LOG_DAEMON|LOG_ERR, "RNDADDENTROPY failed: %s\n",
 			strerror(errno));
@@ -99,7 +100,21 @@ void random_sleep(double poll_timeout)
 	if (ioctl(random_fd, RNDGETENTCNT, &ent_count) == 0 &&
 	    ent_count < arguments->fill_watermark)
 		return;
-	
+
 	poll(&pfd, 1, 1000.0 * poll_timeout);
 }
 
+void list_add(struct rng *ent_src)
+{
+	if (rng_list) {
+		struct rng *iter;
+
+		iter = rng_list;
+		while (iter->next) {
+			iter = iter->next;
+		}
+		iter->next = ent_src;
+	} else {
+		rng_list = ent_src;
+	}
+}

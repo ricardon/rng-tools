@@ -7,7 +7,7 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -56,12 +56,12 @@ extern const unsigned int fips_test_mask[N_FIPS_TESTS];
 /*
  *  Runs the FIPS 140-1 4.11.1 and 4.11.2 tests, as updated by
  *  FIPS 140-2 4.9, errata from 2001-10-10 (which set more strict
- *  intervals for the tests to pass), on a buffer of size 
+ *  intervals for the tests to pass), on a buffer of size
  *  FIPS_RNG_BUFFER_SIZE, using the given context.
  *
- *  FIPS 140-2, errata of 2002-12-03 removed tests for non-deterministic 
+ *  FIPS 140-2, errata of 2002-12-03 removed tests for non-deterministic
  *  RNGs, other than Continuous Run test.
- *  
+ *
  *  This funtion returns 0 if all tests passed, or a bitmask
  *  with bits set for every test that failed.
  *
