@@ -111,16 +111,12 @@ static struct rng rng_default = {
 	.rng_name	= "/dev/hw_random",
 	.rng_fd		= -1,
 	.xread		= xread,
-	.fipsctx	= NULL,
-	.next		= NULL,
 };
 
 static struct rng rng_tpm = {
 	.rng_name	= "/dev/tpm0",
 	.rng_fd		= -1,
 	.xread		= xread_tpm,
-	.fipsctx	= NULL,
-	.next		= NULL,
 };
 
 struct rng *rng_list;
@@ -207,18 +203,46 @@ static void do_loop(int random_step, double poll_timeout)
 {
 	unsigned char buf[FIPS_RNG_BUFFER_SIZE];
 	int retval;
+	int no_work = 0;
 
-	for (;;) {
+	while (no_work < 100) {
 		struct rng *iter;
+		bool work_done;
+
+		work_done = false;
 		for (iter = rng_list; iter; iter = iter->next)
 		{
+			int rc;
+
+			if (iter->disabled)
+				continue;	/* failed, no work */
+
 			retval = iter->xread(buf, sizeof buf, iter);
-			if (retval == 0)
-				update_kernel_random(random_step,
-						     poll_timeout, buf,
-						     iter->fipsctx);
+			if (retval)
+				continue;	/* failed, no work */
+
+			work_done = true;
+
+			rc = update_kernel_random(random_step,
+					     poll_timeout, buf,
+					     iter->fipsctx);
+			if (rc == 0)
+				continue;	/* succeeded, work done */
+
+			iter->failures++;
+			if (iter->failures == MAX_RNG_FAILURES) {
+				message(LOG_DAEMON|LOG_ERR,
+					"too many FIPS failures, disabling entropy source\n");
+				iter->disabled = true;
+			}
 		}
+
+		if (!work_done)
+			no_work++;
 	}
+
+	message(LOG_DAEMON|LOG_ERR,
+		"No entropy sources working, exiting rngd\n");
 }
 
 int main(int argc, char **argv)

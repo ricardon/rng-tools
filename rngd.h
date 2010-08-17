@@ -27,10 +27,15 @@
 
 #include <unistd.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <syslog.h>
 
 #include "fips.h"
+
+enum {
+	MAX_RNG_FAILURES		= 25,
+};
 
 /* Command line arguments and processing */
 struct arguments {
@@ -49,6 +54,8 @@ extern struct arguments *arguments;
 struct rng {
 	char *rng_name;
 	int rng_fd;
+	bool disabled;
+	int failures;
 
 	int (*xread) (void *buf, size_t size, struct rng *ent_src);
 	fips_ctx_t *fipsctx;
