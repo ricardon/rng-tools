@@ -180,12 +180,12 @@ static struct argp argp = { options, parse_opt, NULL, doc };
 
 
 static int update_kernel_random(int random_step, double poll_timeout,
-	unsigned char *buf, fips_ctx_t *fipsctx)
+	unsigned char *buf, fips_ctx_t *fipsctx_in)
 {
 	unsigned char *p;
 	int fips;
 
-	fips = fips_run_rng_test(fipsctx, buf);
+	fips = fips_run_rng_test(fipsctx_in, buf);
 	if (fips) {
 		message(LOG_DAEMON|LOG_ERR, "failed fips test\n");
 		return 1;
