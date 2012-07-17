@@ -13,6 +13,9 @@ rngd \- Check and feed random data from hardware device to kernel random device
 [\fB\-r\fR, \fB\-\-rng-device=\fIfile\fR]
 [\fB\-s\fR, \fB\-\-random-step=\fInnn\fR]
 [\fB\-W\fR, \fB\-\-fill-watermark=\fInnn\fR]
+[\fB\-n\fR, \fB\-\-no-tpm=\fI1|0\fR]
+[\fB\-q\fR, \fB\-\-quiet\fR]
+[\fB\-v\fR, \fB\-\-verbose\fR]
 [\fB\-t\fR, \fB\-\-timeout=\fInnn\fR]
 [\fB\-?\fR, \fB\-\-help\fR]
 [\fB\-V\fR, \fB\-\-version\fR]
@@ -25,7 +28,7 @@ it is properly random.
 .PP
 The \fB\-f\fR or \fB\-\-foreground\fR options can be used to tell
 \fBrngd\fR to avoid forking on startup.  This is typically used for
-debugging.  The \fB\-f\fR or \fB\-\-foreground\fR options, which fork and put
+debugging.  The \fB\-b\fR or \fB\-\-background\fR options, which fork and put
 \fBrngd\fR into the background automatically, are the default.
 .PP
 The \fB\-r\fR or \fB\-\-rng-device\fR options can be used to select an
@@ -64,6 +67,15 @@ entropy pool.  Low values will hurt system performance during entropy
 starves.  Do not set \fIfill-watermark\fR above the size of the
 entropy pool (usually 4096 bits).
 .TP
+\fB\-n\fI 1|0\fR, \fB\-\-no-tpm=\fI1|0\fR
+Do not use tpm as a source of random number input (default:0)
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Suppress error messages
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Report available entropy sources
+.TP
 \fB\-t\fI nnn\fR, \fB\-\-timeout=\fInnn\fR
 Interval written to random-device when the entropy pool is full, in seconds, or 0 to disable (default: 60)
 .TP
@@ -79,4 +91,5 @@ Philipp Rumpf
 Jeff Garzik \- jgarzik@pobox.com
 .br
 Matt Sottek
-
+.br
+Brad Hill

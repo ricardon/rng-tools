@@ -45,6 +45,8 @@ struct arguments {
 	int fill_watermark;
 	double poll_timeout;
 
+	int quiet;
+	int verbose;
 	int daemon;
 	int enable_tpm;
 };

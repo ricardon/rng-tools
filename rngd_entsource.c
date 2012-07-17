@@ -125,6 +125,13 @@ int xread_tpm(void *buf, size_t size, struct rng *ent_src)
 			goto error_out;
 		}
 		r = read(ent_src->rng_fd, temp_buf,size);
+		if (r <= 0) {
+			message(LOG_ERR|LOG_INFO,
+			"Error reading from TPM, no entropy gathered");
+			retval = -1;
+			goto error_out;
+		}
+
 		r = (r - TPM_GET_RNG_OVERHEAD);
 		bytes_read = bytes_read + r;
 		if (bytes_read > size) {
@@ -184,6 +191,8 @@ int init_tpm_entropy_source(struct rng *ent_src)
 {
 	ent_src->rng_fd = open(ent_src->rng_name, O_RDWR);
 	if (ent_src->rng_fd == -1) {
+		message(LOG_ERR|LOG_INFO,"Unable to open file: %s",
+			ent_src->rng_name);
 		return 1;
 	}
 	src_list_add(ent_src);

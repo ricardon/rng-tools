@@ -89,8 +89,12 @@ static struct argp_option options[] = {
 	{ "fill-watermark", 'W', "n", 0,
 	  "Do not stop feeding entropy to random-device until at least n bits of entropy are available in the pool (default: 2048), 0 <= n <= 4096" },
 
+	{ "quiet", 'q', 0, 0, "Suppress error messages" },
+
+	{ "verbose" ,'v', 0, 0, "Report available entropy sources" },
+
 	{ "timeout", 't', "nnn", 0,
-	  "Interval written to random-device when the entropy pool is full, in seconds (default: 60)" },
+	  "Interval written to random-device when the entropy pool is full, in seconds, or 0 to disable (default: 60)" },
 	{ "no-tpm", 'n', "1|0", 0,
 	  "do not use tpm as a source of random number input (default: 0)" },
 
@@ -104,6 +108,8 @@ static struct arguments default_arguments = {
 	.fill_watermark	= 2048,
 	.daemon		= 1,
 	.enable_tpm	= 1,
+	.quiet		= 0,
+	.verbose	= 0,
 };
 struct arguments *arguments = &default_arguments;
 
@@ -160,6 +166,12 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 			arguments->fill_watermark = n;
 		break;
 	}
+	case 'q':
+		arguments->quiet = 1;
+		break;
+	case 'v':
+		arguments->verbose = 1;
+		break;
 	case 'n': {
 		int n;
 		if ((sscanf(arg,"%i", &n) == 0) || ((n | 1)!=1))
@@ -187,7 +199,8 @@ static int update_kernel_random(int random_step, double poll_timeout,
 
 	fips = fips_run_rng_test(fipsctx_in, buf);
 	if (fips) {
-		message(LOG_DAEMON|LOG_ERR, "failed fips test\n");
+		if (!arguments->quiet)
+			message(LOG_DAEMON|LOG_ERR, "failed fips test\n");
 		return 1;
 	}
 
@@ -202,7 +215,7 @@ static int update_kernel_random(int random_step, double poll_timeout,
 static void do_loop(int random_step, double poll_timeout)
 {
 	unsigned char buf[FIPS_RNG_BUFFER_SIZE];
-	int retval;
+	int retval = 0;
 	int no_work = 0;
 
 	while (no_work < 100) {
@@ -231,7 +244,8 @@ static void do_loop(int random_step, double poll_timeout)
 
 			iter->failures++;
 			if (iter->failures == MAX_RNG_FAILURES) {
-				message(LOG_DAEMON|LOG_ERR,
+				if (!arguments->quiet)
+					message(LOG_DAEMON|LOG_ERR,
 					"too many FIPS failures, disabling entropy source\n");
 				iter->disabled = true;
 			}
@@ -241,14 +255,17 @@ static void do_loop(int random_step, double poll_timeout)
 			no_work++;
 	}
 
-	message(LOG_DAEMON|LOG_ERR,
+	if (!arguments->quiet)
+		message(LOG_DAEMON|LOG_ERR,
 		"No entropy sources working, exiting rngd\n");
 }
 
 int main(int argc, char **argv)
 {
-	int rc_rng = 1;
-	int rc_tpm = 1;
+	int rc_rng = 0;
+	int rc_tpm = 0;
+
+	openlog("rngd", 0, LOG_DAEMON);
 
 	/* Parsing of commandline parameters */
 	argp_parse(&argp, argc, argv, 0, 0, arguments);
@@ -259,10 +276,28 @@ int main(int argc, char **argv)
 		rc_tpm = init_tpm_entropy_source(&rng_tpm);
 
 	if (rc_rng && rc_tpm) {
-		message(LOG_DAEMON|LOG_ERR,
-			"can't open entropy source(tpm or intel/amd rng)");
-		message(LOG_DAEMON|LOG_ERR,
-			"Maybe RNG device modules are not loaded\n");
+		if (!arguments->quiet) {
+			message(LOG_DAEMON|LOG_ERR,
+				"can't open entropy source(tpm or intel/amd rng)");
+			message(LOG_DAEMON|LOG_ERR,
+				"Maybe RNG device modules are not loaded\n");
+		}
+		return 1;
+	}
+	
+	if (arguments->verbose) {
+		printf("Available entropy sources:\n");
+		if (!rc_rng)
+			printf("\tIntel/AMD hardware rng\n");
+		if (!rc_tpm)
+			printf("\tTPM\n");
+	}
+
+	if (rc_rng 
+		&& (rc_tpm || !arguments->enable_tpm)) {
+		if (!arguments->quiet)
+			message(LOG_DAEMON|LOG_ERR,
+		"No entropy source available, shutting down\n");
 		return 1;
 	}
 
@@ -273,12 +308,11 @@ int main(int argc, char **argv)
 		am_daemon = 1;
 
 		if (daemon(0, 0) < 0) {
-			fprintf(stderr, "can't daemonize: %s\n",
+			if(!arguments->quiet)
+				fprintf(stderr, "can't daemonize: %s\n",
 				strerror(errno));
 			return 1;
 		}
-
-		openlog("rngd", 0, LOG_DAEMON);
 	}
 
 	do_loop(arguments->random_step,
