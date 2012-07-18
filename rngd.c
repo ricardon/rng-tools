@@ -45,6 +45,7 @@
 #include <string.h>
 #include <argp.h>
 #include <syslog.h>
+#include <signal.h>
 
 #include "rngd.h"
 #include "fips.h"
@@ -58,6 +59,8 @@
 
 /* Background/daemon mode */
 int am_daemon;				/* Nonzero if we went daemon */
+
+bool server_running = true;		/* set to false, to stop daemon */
 
 /* Command line arguments and processing */
 const char *argp_program_version =
@@ -83,6 +86,9 @@ static struct argp_option options[] = {
 	{ "rng-device", 'r', "file", 0,
 	  "Kernel device used for random number input (default: /dev/hw_random)" },
 
+	{ "pid-file", 'p', "file", 0,
+	  "File used for recording daemon PID, and multiple exclusion (default: /var/run/rngd.pid)" },
+
 	{ "random-step", 's', "nnn", 0,
 	  "Number of bytes written to random-device at a time (default: 64)" },
 
@@ -103,6 +109,7 @@ static struct argp_option options[] = {
 
 static struct arguments default_arguments = {
 	.random_name	= "/dev/random",
+	.pid_file	= "/var/run/rngd.pid",
 	.poll_timeout	= 60,
 	.random_step	= 64,
 	.fill_watermark	= 2048,
@@ -135,6 +142,9 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	switch(key) {
 	case 'o':
 		arguments->random_name = arg;
+		break;
+	case 'p':
+		arguments->pid_file = arg;
 		break;
 	case 'r':
 		rng_default.rng_name = arg;
@@ -227,6 +237,9 @@ static void do_loop(int random_step, double poll_timeout)
 		{
 			int rc;
 
+			if (!server_running)
+				return;
+
 			if (iter->disabled)
 				continue;	/* failed, no work */
 
@@ -260,10 +273,16 @@ static void do_loop(int random_step, double poll_timeout)
 		"No entropy sources working, exiting rngd\n");
 }
 
+static void term_signal(int signo)
+{
+	server_running = false;
+}
+
 int main(int argc, char **argv)
 {
 	int rc_rng = 0;
 	int rc_tpm = 0;
+	int pid_fd = -1;
 
 	openlog("rngd", 0, LOG_DAEMON);
 
@@ -284,7 +303,7 @@ int main(int argc, char **argv)
 		}
 		return 1;
 	}
-	
+
 	if (arguments->verbose) {
 		printf("Available entropy sources:\n");
 		if (!rc_rng)
@@ -293,7 +312,7 @@ int main(int argc, char **argv)
 			printf("\tTPM\n");
 	}
 
-	if (rc_rng 
+	if (rc_rng
 		&& (rc_tpm || !arguments->enable_tpm)) {
 		if (!arguments->quiet)
 			message(LOG_DAEMON|LOG_ERR,
@@ -313,10 +332,23 @@ int main(int argc, char **argv)
 				strerror(errno));
 			return 1;
 		}
+
+		/* require valid, locked PID file to proceed */
+		pid_fd = write_pid_file(arguments->pid_file);
+		if (pid_fd < 0)
+			return 1;
+
+		signal(SIGHUP, SIG_IGN);
+		signal(SIGPIPE, SIG_IGN);
+		signal(SIGINT, term_signal);
+		signal(SIGTERM, term_signal);
 	}
 
 	do_loop(arguments->random_step,
 		arguments->poll_timeout ? : -1.0);
+
+	if (pid_fd >= 0)
+		unlink(arguments->pid_file);
 
 	return 0;
 }

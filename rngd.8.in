@@ -10,6 +10,7 @@ rngd \- Check and feed random data from hardware device to kernel random device
 [\fB\-b\fR, \fB\-\-background\fR]
 [\fB\-f\fR, \fB\-\-foreground\fR]
 [\fB\-o\fR, \fB\-\-random-device=\fIfile\fR]
+[\fB\-p\fR, \fB\-\-pid-file=\fIfile\fR]
 [\fB\-r\fR, \fB\-\-rng-device=\fIfile\fR]
 [\fB\-s\fR, \fB\-\-random-step=\fInnn\fR]
 [\fB\-W\fR, \fB\-\-fill-watermark=\fInnn\fR]
@@ -47,6 +48,10 @@ Become a daemon (default)
 .TP
 \fB\-f\fR, \fB\-\-foreground\fR
 Do not fork and become a daemon
+.TP
+\fB\-p\fI file\fR, \fB\-\-pid-file=\fIfile\fR
+File used for recording daemon PID, and multiple exclusion
+(default: /var/run/rngd.pid)
 .TP
 \fB\-o\fI file\fR, \fB\-\-random-device=\fIfile\fR
 Kernel device used for random number output
