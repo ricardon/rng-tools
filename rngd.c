@@ -58,7 +58,7 @@
  */
 
 /* Background/daemon mode */
-int am_daemon;				/* Nonzero if we went daemon */
+bool am_daemon;				/* True if we went daemon */
 
 bool server_running = true;		/* set to false, to stop daemon */
 
@@ -113,10 +113,10 @@ static struct arguments default_arguments = {
 	.poll_timeout	= 60,
 	.random_step	= 64,
 	.fill_watermark	= 2048,
-	.daemon		= 1,
-	.enable_tpm	= 1,
-	.quiet		= 0,
-	.verbose	= 0,
+	.daemon		= true,
+	.enable_tpm	= true,
+	.quiet		= false,
+	.verbose	= false,
 };
 struct arguments *arguments = &default_arguments;
 
@@ -159,10 +159,10 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	}
 
 	case 'f':
-		arguments->daemon = 0;
+		arguments->daemon = false;
 		break;
 	case 'b':
-		arguments->daemon = 1;
+		arguments->daemon = true;
 		break;
 	case 's':
 		if (sscanf(arg, "%i", &arguments->random_step) == 0)
@@ -177,17 +177,17 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 		break;
 	}
 	case 'q':
-		arguments->quiet = 1;
+		arguments->quiet = true;
 		break;
 	case 'v':
-		arguments->verbose = 1;
+		arguments->verbose = true;
 		break;
 	case 'n': {
 		int n;
 		if ((sscanf(arg,"%i", &n) == 0) || ((n | 1)!=1))
 			argp_usage(state);
 		else
-			arguments->enable_tpm = 0;
+			arguments->enable_tpm = false;
 		break;
 	}
 
@@ -324,7 +324,7 @@ int main(int argc, char **argv)
 	init_kernel_rng(arguments->random_name);
 
 	if (arguments->daemon) {
-		am_daemon = 1;
+		am_daemon = true;
 
 		if (daemon(0, 0) < 0) {
 			if(!arguments->quiet)

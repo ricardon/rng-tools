@@ -46,10 +46,10 @@ struct arguments {
 	int fill_watermark;
 	double poll_timeout;
 
-	int quiet;
-	int verbose;
-	int daemon;
-	int enable_tpm;
+	bool quiet;
+	bool verbose;
+	bool daemon;
+	bool enable_tpm;
 };
 extern struct arguments *arguments;
 
@@ -67,7 +67,7 @@ struct rng {
 };
 
 /* Background/daemon mode */
-extern int am_daemon;			/* Nonzero if we went daemon */
+extern bool am_daemon;			/* True if we went daemon */
 
 
 /*
