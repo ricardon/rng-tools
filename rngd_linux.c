@@ -89,7 +89,7 @@ void random_add_entropy(void *buf, size_t size)
 	}
 }
 
-void random_sleep(double poll_timeout)
+void random_sleep()
 {
 	int ent_count;
 	struct pollfd pfd = {
@@ -97,11 +97,7 @@ void random_sleep(double poll_timeout)
 		events:	POLLOUT,
 	};
 
-	if (ioctl(random_fd, RNDGETENTCNT, &ent_count) == 0 &&
-	    ent_count < arguments->fill_watermark)
-		return;
-
-	poll(&pfd, 1, 1000.0 * poll_timeout);
+	poll(&pfd, 1, -1);
 }
 
 void src_list_add(struct rng *ent_src)

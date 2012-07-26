@@ -99,8 +99,6 @@ static struct argp_option options[] = {
 
 	{ "verbose" ,'v', 0, 0, "Report available entropy sources" },
 
-	{ "timeout", 't', "nnn", 0,
-	  "Interval written to random-device when the entropy pool is full, in seconds, or 0 to disable (default: 60)" },
 	{ "no-tpm", 'n', "1|0", 0,
 	  "do not use tpm as a source of random number input (default: 0)" },
 
@@ -110,7 +108,6 @@ static struct argp_option options[] = {
 static struct arguments default_arguments = {
 	.random_name	= "/dev/random",
 	.pid_file	= "/var/run/rngd.pid",
-	.poll_timeout	= 60,
 	.random_step	= 64,
 	.fill_watermark	= 2048,
 	.daemon		= true,
@@ -149,15 +146,6 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	case 'r':
 		rng_default.rng_name = arg;
 		break;
-	case 't': {
-		float f;
-		if (sscanf(arg, "%f", &f) == 0)
-			argp_usage(state);
-		else
-			arguments->poll_timeout = f;
-		break;
-	}
-
 	case 'f':
 		arguments->daemon = false;
 		break;
@@ -201,7 +189,7 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 static struct argp argp = { options, parse_opt, NULL, doc };
 
 
-static int update_kernel_random(int random_step, double poll_timeout,
+static int update_kernel_random(int random_step,
 	unsigned char *buf, fips_ctx_t *fipsctx_in)
 {
 	unsigned char *p;
@@ -217,12 +205,12 @@ static int update_kernel_random(int random_step, double poll_timeout,
 	for (p = buf; p + random_step <= &buf[FIPS_RNG_BUFFER_SIZE];
 		 p += random_step) {
 		random_add_entropy(p, random_step);
-		random_sleep(poll_timeout);
+		random_sleep();
 	}
 	return 0;
 }
 
-static void do_loop(int random_step, double poll_timeout)
+static void do_loop(int random_step)
 {
 	unsigned char buf[FIPS_RNG_BUFFER_SIZE];
 	int retval = 0;
@@ -250,8 +238,7 @@ static void do_loop(int random_step, double poll_timeout)
 			work_done = true;
 
 			rc = update_kernel_random(random_step,
-					     poll_timeout, buf,
-					     iter->fipsctx);
+					     buf, iter->fipsctx);
 			if (rc == 0)
 				continue;	/* succeeded, work done */
 
@@ -344,8 +331,7 @@ int main(int argc, char **argv)
 		signal(SIGTERM, term_signal);
 	}
 
-	do_loop(arguments->random_step,
-		arguments->poll_timeout ? : -1.0);
+	do_loop(arguments->random_step);
 
 	if (pid_fd >= 0)
 		unlink(arguments->pid_file);

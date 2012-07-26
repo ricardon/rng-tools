@@ -17,7 +17,6 @@ rngd \- Check and feed random data from hardware device to kernel random device
 [\fB\-n\fR, \fB\-\-no-tpm=\fI1|0\fR]
 [\fB\-q\fR, \fB\-\-quiet\fR]
 [\fB\-v\fR, \fB\-\-verbose\fR]
-[\fB\-t\fR, \fB\-\-timeout=\fInnn\fR]
 [\fB\-?\fR, \fB\-\-help\fR]
 [\fB\-V\fR, \fB\-\-version\fR]
 .RI
@@ -80,9 +79,6 @@ Suppress error messages
 .TP
 \fB\-v\fR, \fB\-\-verbose\fR
 Report available entropy sources
-.TP
-\fB\-t\fI nnn\fR, \fB\-\-timeout=\fInnn\fR
-Interval written to random-device when the entropy pool is full, in seconds, or 0 to disable (default: 60)
 .TP
 \fB\-?\fR, \fB\-\-help\fR
 Give a short summary of all program options.

@@ -44,7 +44,6 @@ struct arguments {
 
 	int random_step;
 	int fill_watermark;
-	double poll_timeout;
 
 	bool quiet;
 	bool verbose;
