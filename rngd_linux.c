@@ -53,6 +53,37 @@ extern struct rng *rng_list;
 /* Kernel output device */
 static int random_fd;
 
+/*
+ * Get the default watermark
+ */
+int default_watermark(void)
+{
+	char psbuf[64], *p;
+	unsigned long ps;
+	FILE *f;
+	size_t l;
+	unsigned int wm = 2048;	/* Default guess */
+
+	f = fopen("/proc/sys/kernel/random/poolsize", "r");
+	if (!f)
+		goto err;
+	l = fread(psbuf, 1, sizeof psbuf, f);
+	if (ferror(f) || !feof(f) || l == 0)
+		goto err;
+	if (psbuf[l-1] != '\n')
+		goto err;
+	psbuf[l-1] = '\0';
+	ps = strtoul(psbuf, &p, 0);
+	if (*p)
+		goto err;
+
+	wm = ps*3/4;
+
+err:
+	if (f)
+		fclose(f);
+	return wm;
+}
 
 /*
  * Initialize the interface to the Linux Kernel
@@ -62,11 +93,19 @@ static int random_fd;
  */
 void init_kernel_rng(const char* randomdev)
 {
+	FILE *f;
+
 	random_fd = open(randomdev, O_RDWR);
 	if (random_fd == -1) {
 		message(LOG_DAEMON|LOG_ERR, "can't open %s: %s",
 			randomdev, strerror(errno));
 		exit(EXIT_USAGE);
+	}
+
+	f = fopen("/proc/sys/kernel/random/write_wakeup_threshold", "w");
+	if (f) {
+		fprintf(f, "%u\n", arguments->fill_watermark);
+		fclose(f);
 	}
 }
 

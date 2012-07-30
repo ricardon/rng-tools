@@ -112,7 +112,6 @@ static struct arguments default_arguments = {
 	.random_name	= "/dev/random",
 	.pid_file	= "/var/run/rngd.pid",
 	.random_step	= 64,
-	.fill_watermark	= 2048,
 	.daemon		= true,
 	.enable_drng	= true,
 	.enable_tpm	= true,
@@ -291,6 +290,9 @@ int main(int argc, char **argv)
 	int pid_fd = -1;
 
 	openlog("rngd", 0, LOG_DAEMON);
+
+	/* Get the default watermark level for this platform */
+	arguments->fill_watermark = default_watermark();
 
 	/* Parsing of commandline parameters */
 	argp_parse(&argp, argc, argv, 0, 0, arguments);

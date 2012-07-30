@@ -26,6 +26,9 @@
 #include <unistd.h>
 #include <stdint.h>
 
+/* The default watermark level for this platform */
+extern int default_watermark(void);
+
 /*
  * Initialize the interface to the Linux Kernel
  * entropy pool (through /dev/random)
