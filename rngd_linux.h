@@ -38,7 +38,7 @@ extern void init_kernel_rng(const char* randomdev);
 extern void random_add_entropy(void *buf, size_t size);
 
 /* Sleep until the kernel is hungry for entropy */
-extern void random_sleep();
+extern void random_sleep(void);
 
 #endif /* RNGD_LINUX__H */
 

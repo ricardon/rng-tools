@@ -89,7 +89,7 @@ void random_add_entropy(void *buf, size_t size)
 	}
 }
 
-void random_sleep()
+void random_sleep(void)
 {
 	struct pollfd pfd = {
 		fd:	random_fd,
