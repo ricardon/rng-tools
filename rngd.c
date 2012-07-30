@@ -84,7 +84,7 @@ static struct argp_option options[] = {
 	  "Kernel device used for random number output (default: /dev/random)" },
 
 	{ "rng-device", 'r', "file", 0,
-	  "Kernel device used for random number input (default: /dev/hw_random)" },
+	  "Kernel device used for random number input (default: /dev/hwrng)" },
 
 	{ "pid-file", 'p', "file", 0,
 	  "File used for recording daemon PID, and multiple exclusion (default: /var/run/rngd.pid)" },
@@ -121,7 +121,7 @@ static struct arguments default_arguments = {
 struct arguments *arguments = &default_arguments;
 
 static struct rng rng_default = {
-	.rng_name	= "/dev/hw_random",
+	.rng_name	= "/dev/hwrng",
 	.rng_fd		= -1,
 	.xread		= xread,
 };
