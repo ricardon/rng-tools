@@ -48,6 +48,7 @@ struct arguments {
 	bool quiet;
 	bool verbose;
 	bool daemon;
+	bool enable_drng;
 	bool enable_tpm;
 };
 extern struct arguments *arguments;

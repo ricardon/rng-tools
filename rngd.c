@@ -99,8 +99,11 @@ static struct argp_option options[] = {
 
 	{ "verbose" ,'v', 0, 0, "Report available entropy sources" },
 
+	{ "no-drng", 'd', "1|0", 0,
+	  "Do not use drng as a source of random number input (default: 0)" },
+	
 	{ "no-tpm", 'n', "1|0", 0,
-	  "do not use tpm as a source of random number input (default: 0)" },
+	  "Do not use tpm as a source of random number input (default: 0)" },
 
 	{ 0 },
 };
@@ -111,6 +114,7 @@ static struct arguments default_arguments = {
 	.random_step	= 64,
 	.fill_watermark	= 2048,
 	.daemon		= true,
+	.enable_drng	= true,
 	.enable_tpm	= true,
 	.quiet		= false,
 	.verbose	= false,
@@ -121,6 +125,12 @@ static struct rng rng_default = {
 	.rng_name	= "/dev/hw_random",
 	.rng_fd		= -1,
 	.xread		= xread,
+};
+
+static struct rng rng_drng = {
+	.rng_name	= "drng",
+	.rng_fd  	= -1,
+	.xread  	= xread_drng,
 };
 
 static struct rng rng_tpm = {
@@ -170,6 +180,14 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 	case 'v':
 		arguments->verbose = true;
 		break;
+	case 'd': {
+		int n;
+		if ((sscanf(arg,"%i", &n) == 0) || ((n | 1)!=1))
+			argp_usage(state);
+		else
+			arguments->enable_drng = false;
+		break;
+	}
 	case 'n': {
 		int n;
 		if ((sscanf(arg,"%i", &n) == 0) || ((n | 1)!=1))
@@ -240,7 +258,7 @@ static void do_loop(int random_step)
 			rc = update_kernel_random(random_step,
 					     buf, iter->fipsctx);
 			if (rc == 0)
-				continue;	/* succeeded, work done */
+				break;	/* succeeded, work done */
 
 			iter->failures++;
 			if (iter->failures == MAX_RNG_FAILURES) {
@@ -267,8 +285,9 @@ static void term_signal(int signo)
 
 int main(int argc, char **argv)
 {
-	int rc_rng = 0;
-	int rc_tpm = 0;
+	int rc_rng = 1;
+	int rc_drng = 1;
+	int rc_tpm = 1;
 	int pid_fd = -1;
 
 	openlog("rngd", 0, LOG_DAEMON);
@@ -278,10 +297,12 @@ int main(int argc, char **argv)
 
 	/* Init entropy sources, and open TRNG device */
 	rc_rng = init_entropy_source(&rng_default);
+	if (arguments->enable_drng)
+		rc_drng = init_drng_entropy_source(&rng_drng);
 	if (arguments->enable_tpm)
 		rc_tpm = init_tpm_entropy_source(&rng_tpm);
 
-	if (rc_rng && rc_tpm) {
+	if (rc_rng && rc_drng && rc_tpm) {
 		if (!arguments->quiet) {
 			message(LOG_DAEMON|LOG_ERR,
 				"can't open entropy source(tpm or intel/amd rng)");
@@ -295,11 +316,14 @@ int main(int argc, char **argv)
 		printf("Available entropy sources:\n");
 		if (!rc_rng)
 			printf("\tIntel/AMD hardware rng\n");
+		if (!rc_drng)
+			printf("\tDRNG\n");
 		if (!rc_tpm)
 			printf("\tTPM\n");
 	}
 
 	if (rc_rng
+		&& (rc_drng || !arguments->enable_drng)
 		&& (rc_tpm || !arguments->enable_tpm)) {
 		if (!arguments->quiet)
 			message(LOG_DAEMON|LOG_ERR,

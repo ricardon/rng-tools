@@ -51,6 +51,8 @@ dnl -----------------
 dnl Configure options
 dnl -----------------
 
+AM_PROG_AS
+
 dnl --------------------------
 dnl autoconf output generation
 dnl --------------------------
