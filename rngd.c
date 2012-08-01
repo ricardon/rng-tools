@@ -242,6 +242,7 @@ static void do_loop(int random_step)
 			if (!server_running)
 				return;
 
+		retry_same:
 			if (iter->disabled)
 				continue;	/* failed, no work */
 
@@ -264,7 +265,10 @@ static void do_loop(int random_step)
 			}
 
 			iter->failures++;
-			if (iter->failures == MAX_RNG_FAILURES) {
+			if (iter->failures <= MAX_RNG_FAILURES/4) {
+				/* FIPS tests have false positives */
+				goto retry_same;
+			} else if (iter->failures >= MAX_RNG_FAILURES) {
 				if (!arguments->quiet)
 					message(LOG_DAEMON|LOG_ERR,
 					"too many FIPS failures, disabling entropy source\n");
