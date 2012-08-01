@@ -302,9 +302,9 @@ int main(int argc, char **argv)
 	argp_parse(&argp, argc, argv, 0, 0, arguments);
 
 	/* Init entropy sources, and open TRNG device */
-	rc_rng = init_entropy_source(&rng_default);
 	if (arguments->enable_drng)
 		rc_drng = init_drng_entropy_source(&rng_drng);
+	rc_rng = init_entropy_source(&rng_default);
 	if (arguments->enable_tpm && rc_rng)
 		rc_tpm = init_tpm_entropy_source(&rng_tpm);
 
