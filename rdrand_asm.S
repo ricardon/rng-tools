@@ -193,3 +193,9 @@ aes_fwd_state:
 	.size	aes_fwd_state, .-aes_fwd_state
 
 #endif /* i386 or x86_64 */
+
+/*
+ * This is necessary to keep the whole executable
+ * from needing a writable stack.
+ */
+                .section        .note.GNU-stack,"",%progbits
