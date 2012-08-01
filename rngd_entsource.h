@@ -26,24 +26,9 @@
 #include <unistd.h>
 #include <stdint.h>
 
-/* Struct for CPUID return values */
-struct cpuid {
-        uint32_t eax, ecx, edx, ebx;
-};
-
 /* Logic and contexts */
 extern fips_ctx_t fipsctx;		/* Context for the FIPS tests */
 extern fips_ctx_t tpm_fipsctx;	/* Context for the tpm FIPS tests */
-
-/* Inline assembly to check eflags */
-/* Only necessary on 32 bit processor */
-#if defined (__i386__)
-int x86_has_eflag(uint32_t flag);
-#endif
-
-/* Inline assembly for CPUID call for RDRAND */
-extern int x86_rdrand_nlong(void *ptr, size_t count);	/* RDRAND-access logic */
-extern void x86_aes_mangle(void *data, void *state);	/* Conditioning RDRAND for seed-grade entropy */
 
 /*
  * Initialize entropy source and entropy conditioning
