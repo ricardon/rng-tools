@@ -44,11 +44,6 @@
 
 #if defined(__i386__) || defined(__x86_64__)
 
-/* Initialization vector and msg sizes for standard AES usage */
-#define IV_SIZE			(16*1)
-#define MSG_SIZE		(16*7)
-#define CHUNK_SIZE		(16*8)
-
 /* Struct for CPUID return values */
 struct cpuid {
         uint32_t eax, ecx, edx, ebx;
@@ -102,51 +97,33 @@ static void cpuid(unsigned int leaf, unsigned int subleaf, struct cpuid *out)
 #endif
 }
 
-/* Read data from the drng
- * in chunks of 128 bytes for AES scrambling */
+/* Read data from the drng in chunks of 128 bytes for AES scrambling */
+#define CHUNK_SIZE		(16*8)
+
+static unsigned char iv_buf[CHUNK_SIZE] __attribute__((aligned(128)));
+
 int xread_drng(void *buf, size_t size, struct rng *ent_src)
 {
-	size_t psize = size;
-	size_t off = 0;
-	ssize_t r = 0;
-	int rdrand_round_count = size / 128;
-
-	static unsigned char iv_buf[IV_SIZE] __attribute__((aligned(128)));
-	static unsigned char m_buf[MSG_SIZE] __attribute__((aligned(128)));
-	static unsigned char tmp[CHUNK_SIZE] __attribute__((aligned(128)));
-	static unsigned char fwd[CHUNK_SIZE] __attribute__((aligned(128)));
+	char *p = buf;
+	size_t chunk;
+	const int rdrand_round_count = 512;
+	unsigned char tmp[CHUNK_SIZE] __attribute__((aligned(128)));
 	int i;
 
-	while (size > 0 && size <= psize) {
-		for (i = 0; i < rdrand_round_count && size <= psize; i++) {
-			if (!x86_rdrand_nlong(iv_buf, sizeof(iv_buf)/sizeof(long))) {
-				r = -1;
-				break;
+	while (size) {
+		for (i = 0; i < rdrand_round_count; i++) {
+			if (!x86_rdrand_nlong(tmp, CHUNK_SIZE/sizeof(long))) {
+				message(LOG_DAEMON|LOG_ERR, "read error\n");
+				return -1;
 			}
-			if (!x86_rdrand_nlong(m_buf, sizeof(m_buf)/sizeof(long))) {
-				r = -1;
-				break;
-			}
-			memcpy(tmp, iv_buf, IV_SIZE);
-			memcpy(tmp+IV_SIZE, m_buf, MSG_SIZE);
-
-			x86_aes_mangle(tmp, fwd);
-			r = (sizeof(tmp) > size)? size : sizeof(tmp);
-
-			if (r <= 0)
-				break;
-			memcpy(buf+off, tmp, r);
-			off += r;
-			size -= r;
+			x86_aes_mangle(tmp, iv_buf);
 		}
-		if (r <= 0)
-			break;
+		chunk = (sizeof(tmp) > size) ? size : sizeof(tmp);
+		memcpy(p, tmp, chunk);
+		p += chunk;
+		size -= chunk;
 	}
 
-	if (size > 0 && size < psize) {
-		message(LOG_DAEMON|LOG_ERR, "read error\n");
-		return -1;
-	}
 	return 0;
 }
 
@@ -169,6 +146,10 @@ int init_drng_entropy_source(struct rng *ent_src)
 		return 1;
 	cpuid(1, 0, &info);
 	if ((info.ecx & need_features_ecx1) != need_features_ecx1)
+		return 1;
+
+	/* Initialize the IV buffer */
+	if (!x86_rdrand_nlong(iv_buf, CHUNK_SIZE/sizeof(long)))
 		return 1;
 
 	src_list_add(ent_src);
