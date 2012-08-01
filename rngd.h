@@ -35,6 +35,7 @@
 
 enum {
 	MAX_RNG_FAILURES		= 25,
+	RNG_OK_CREDIT			= 1000, /* ~1:1250 false positives */
 };
 
 /* Command line arguments and processing */
@@ -59,6 +60,7 @@ struct rng {
 	int rng_fd;
 	bool disabled;
 	int failures;
+	int success;
 
 	int (*xread) (void *buf, size_t size, struct rng *ent_src);
 	fips_ctx_t *fipsctx;

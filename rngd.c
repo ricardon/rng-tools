@@ -213,11 +213,8 @@ static int update_kernel_random(int random_step,
 	int fips;
 
 	fips = fips_run_rng_test(fipsctx_in, buf);
-	if (fips) {
-		if (!arguments->quiet)
-			message(LOG_DAEMON|LOG_ERR, "failed fips test\n");
+	if (fips)
 		return 1;
-	}
 
 	for (p = buf; p + random_step <= &buf[FIPS_RNG_BUFFER_SIZE];
 		 p += random_step) {
@@ -256,8 +253,15 @@ static void do_loop(int random_step)
 
 			rc = update_kernel_random(random_step,
 					     buf, iter->fipsctx);
-			if (rc == 0)
+			if (rc == 0) {
+				iter->success++;
+				if (iter->success >= RNG_OK_CREDIT) {
+					if (iter->failures)
+						iter->failures--;
+					iter->success = 0;
+				}
 				break;	/* succeeded, work done */
+			}
 
 			iter->failures++;
 			if (iter->failures == MAX_RNG_FAILURES) {
