@@ -301,13 +301,13 @@ int main(int argc, char **argv)
 	rc_rng = init_entropy_source(&rng_default);
 	if (arguments->enable_drng)
 		rc_drng = init_drng_entropy_source(&rng_drng);
-	if (arguments->enable_tpm)
+	if (arguments->enable_tpm && rc_rng)
 		rc_tpm = init_tpm_entropy_source(&rng_tpm);
 
 	if (rc_rng && rc_drng && rc_tpm) {
 		if (!arguments->quiet) {
 			message(LOG_DAEMON|LOG_ERR,
-				"can't open entropy source(tpm or intel/amd rng)");
+				"can't open any entropy source");
 			message(LOG_DAEMON|LOG_ERR,
 				"Maybe RNG device modules are not loaded\n");
 		}
