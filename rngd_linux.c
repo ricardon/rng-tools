@@ -94,6 +94,7 @@ err:
 void init_kernel_rng(const char* randomdev)
 {
 	FILE *f;
+	int err;
 
 	random_fd = open(randomdev, O_RDWR);
 	if (random_fd == -1) {
@@ -103,9 +104,17 @@ void init_kernel_rng(const char* randomdev)
 	}
 
 	f = fopen("/proc/sys/kernel/random/write_wakeup_threshold", "w");
-	if (f) {
+	if (!f) {
+		err = 1;
+	} else {
 		fprintf(f, "%u\n", arguments->fill_watermark);
-		fclose(f);
+		/* Note | not || here... we always want to close the file */
+		err = ferror(f) | fclose(f);
+	}
+	if (err) {
+		message(LOG_DAEMON|LOG_WARNING,
+			"unable to adjust write_wakeup_threshold: %s",
+			strerror(errno));
 	}
 }
 
