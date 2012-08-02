@@ -1,4 +1,14 @@
 
+Version 4 (August 2, 2012):
+* Add RDRAND instruction support
+* Add -q and -v options for quiet and verbose output
+* Add -p option for specifying PID file (text file containing daemon's PID)
+* Disable entropy source if facing continued failures, but be
+  tolerant of the occasional fault.
+* Default device is now the preferred /dev/hwrng
+* Do not use TPM device for RNG access, if /dev/hwrng is present
+  (TPM RNG is exported via the kernel, in newer kernels)
+
 Version 3 (July 3, 2010):
 
 * add rngtest program
