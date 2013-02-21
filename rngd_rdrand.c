@@ -1,7 +1,8 @@
 /*
  * Copyright (c) 2012, Intel Corporation
  * Authors: Richard B. Hill <richard.b.hill@intel.com>,
- *          H. Peter Anvin <hpa@linux.intel.com>
+ *          H. Peter Anvin <hpa@linux.intel.com>,
+ *          John P. Mechalas <john.p.mechalas@intel.com>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -36,6 +37,9 @@
 #include <syslog.h>
 #include <string.h>
 #include <stddef.h>
+#ifdef HAVE_LIBGCRYPT
+#include <gcrypt.h>
+#endif
 
 #include "rngd.h"
 #include "fips.h"
@@ -76,7 +80,7 @@ static int x86_has_eflag(uint32_t flag)
 }
 #endif
 
-/* Calling cpuid instruction to verify rdrand capability */
+/* Calling cpuid instruction to verify rdrand and aes-ni capability */
 static void cpuid(unsigned int leaf, unsigned int subleaf, struct cpuid *out)
 {
 #ifdef __i386__
@@ -101,6 +105,25 @@ static void cpuid(unsigned int leaf, unsigned int subleaf, struct cpuid *out)
 #define CHUNK_SIZE		(16*8)
 
 static unsigned char iv_buf[CHUNK_SIZE] __attribute__((aligned(128)));
+static int have_aesni= 0;
+
+/* Necessary if we have RDRAND but not AES-NI */
+
+#ifdef HAVE_LIBGCRYPT
+
+#define MIN_GCRYPT_VERSION "1.0.0"
+
+static gcry_cipher_hd_t gcry_cipher_hd;
+
+/* Arbitrary 128-bit AES key 0x00102030405060708090A0B0C0D0E0F0 */
+
+static const unsigned char key[16]= {
+	0x00, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70,
+	0x80, 0x90, 0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xF0
+};
+
+#endif
+
 
 int xread_drng(void *buf, size_t size, struct rng *ent_src)
 {
@@ -116,7 +139,29 @@ int xread_drng(void *buf, size_t size, struct rng *ent_src)
 				message(LOG_DAEMON|LOG_ERR, "read error\n");
 				return -1;
 			}
-			x86_aes_mangle(tmp, iv_buf);
+
+			// Use 128-bit AES in CBC mode to mangle our random data
+
+			if ( have_aesni ) x86_aes_mangle(tmp, iv_buf);
+			else {
+#ifdef HAVE_LIBGCRYPT
+				gcry_error_t gcry_error;
+
+				/* Encrypt tmp in-place. */
+
+				gcry_error= gcry_cipher_encrypt(gcry_cipher_hd,
+					tmp, CHUNK_SIZE, NULL, 0);
+
+				if ( gcry_error ) {
+					message(LOG_DAEMON|LOG_ERR,
+						"gcry_cipher_encrypt error: %s\n",
+						gcry_strerror(gcry_error));
+					return -1;
+				}
+#else
+				return -1;
+#endif
+			}
 		}
 		chunk = (sizeof(tmp) > size) ? size : sizeof(tmp);
 		memcpy(p, tmp, chunk);
@@ -133,8 +178,9 @@ int xread_drng(void *buf, size_t size, struct rng *ent_src)
 int init_drng_entropy_source(struct rng *ent_src)
 {
 	struct cpuid info;
-	/* We need RDRAND and AESni */
-	const uint32_t need_features_ecx1 = (1 << 30) | (1 << 25);
+	/* We need RDRAND, but AESni is optional */
+	const uint32_t features_ecx1_rdrand = 1 << 30;
+	const uint32_t features_ecx1_aesni = 1 << 25;
 
 #if defined(__i386__)
 	if (!x86_has_eflag(1 << 21))
@@ -145,12 +191,54 @@ int init_drng_entropy_source(struct rng *ent_src)
 	if (info.eax < 1)
 		return 1;
 	cpuid(1, 0, &info);
-	if ((info.ecx & need_features_ecx1) != need_features_ecx1)
+	if (! (info.ecx & features_ecx1_rdrand) )
 		return 1;
+
+	have_aesni= (info.ecx & features_ecx1_aesni) ? 1 : 0;
+#ifndef HAVE_LIBGCRYPT
+	if ( ! have_aesni ) return 1;
+#endif
 
 	/* Initialize the IV buffer */
 	if (!x86_rdrand_nlong(iv_buf, CHUNK_SIZE/sizeof(long)))
 		return 1;
+
+#ifdef HAVE_LIBGCRYPT
+	if ( ! have_aesni ) {
+		gcry_error_t gcry_error;
+
+		if (! gcry_check_version(MIN_GCRYPT_VERSION) ) {
+			message(LOG_DAEMON|LOG_ERR,
+				"libgcrypt version mismatch: have %s, require >= %s\n",
+				gcry_check_version(NULL), MIN_GCRYPT_VERSION);
+			return 1;
+		}
+
+		gcry_error= gcry_cipher_open(&gcry_cipher_hd,
+			GCRY_CIPHER_AES128, GCRY_CIPHER_MODE_CBC, 0);
+
+		if ( ! gcry_error ) {
+			gcry_error= gcry_cipher_setkey(gcry_cipher_hd, key, 16);
+		}
+
+		if ( ! gcry_error ) {
+			/*
+			 * Only need the first 16 bytes of iv_buf. AES-NI can
+			 * encrypt multiple blocks in parallel but we can't.
+			 */
+
+			gcry_error= gcry_cipher_setiv(gcry_cipher_hd, iv_buf, 16);
+		}
+
+		if ( gcry_error ) {
+			message(LOG_DAEMON|LOG_ERR,
+				"could not set key or IV: %s\n",
+				gcry_strerror(gcry_error));
+			gcry_cipher_close(gcry_cipher_hd);
+			return 1;
+		}
+	}
+#endif
 
 	src_list_add(ent_src);
 	/* Bootstrap FIPS tests */
