@@ -39,7 +39,6 @@ an alternate entropy output device, besides the default /dev/random.
 Note that this device must support the Linux kernel /dev/random 
 ioctl API.
 .PP
-FIXME: document random-step and timeout
 
 .SH OPTIONS
 .TP
