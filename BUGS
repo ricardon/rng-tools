@@ -1,0 +1,7 @@
+
+1) Should interpret TPM response for failure, instead of 
+   simply accepting data as random data.
+
+2) Should fail gracefully at startup, if no privs to add entropy,
+   rather than failing continually at entropy submission time.
+
