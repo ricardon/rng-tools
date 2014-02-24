@@ -57,6 +57,8 @@ struct cpuid {
 extern int x86_rdrand_nlong(void *ptr, size_t count);
 /* Conditioning RDRAND for seed-grade entropy */
 extern void x86_aes_mangle(void *data, void *state);
+/* Expand an AES key for future use */
+extern void x86_aes_expand_key(const void *key);
 
 /* Checking eflags to confirm cpuid instruction available */
 static inline int x86_has_eflag(unsigned long flag)
@@ -141,6 +143,7 @@ static inline int gcrypt_mangle(unsigned char *tmp)
 	}
 	return 0;
 #else
+	(void)tmp;
 	return -1;
 #endif
 }
@@ -152,6 +155,8 @@ int xread_drng(void *buf, size_t size, struct rng *ent_src)
 	const int rdrand_round_count = 512;
 	unsigned char tmp[CHUNK_SIZE] __attribute__((aligned(128)));
 	int i;
+
+	(void)ent_src;
 
 	while (size) {
 		for (i = 0; i < rdrand_round_count; i++) {
@@ -178,14 +183,18 @@ int xread_drng(void *buf, size_t size, struct rng *ent_src)
 	return 0;
 }
 
-static int init_gcrypt(void)
+static int init_aesni(const void *key)
+{
+	if (!have_aesni)
+		return 1;
+
+	x86_aes_expand_key(key);
+	return 0;
+}
+
+static int init_gcrypt(const void *key)
 {
 #ifdef HAVE_LIBGCRYPT
-	/* Arbitrary 128-bit AES key 0x00102030405060708090A0B0C0D0E0F0 */
-	static const unsigned char key[16] = {
-		0x00, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70,
-		0x80, 0x90, 0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xF0
-	};
 	gcry_error_t gcry_error;
 
 	if (!gcry_check_version(MIN_GCRYPT_VERSION)) {
@@ -218,6 +227,7 @@ static int init_gcrypt(void)
 	}
 	return 0;
 #else
+	(void)key;
 	return 1;
 #endif
 }
@@ -231,6 +241,13 @@ int init_drng_entropy_source(struct rng *ent_src)
 	/* We need RDRAND, but AESni is optional */
 	const uint32_t features_ecx1_rdrand = 1 << 30;
 	const uint32_t features_ecx1_aesni  = 1 << 25;
+	static unsigned char key[16] = {
+		0x00,0x10,0x20,0x30,0x40,0x50,0x60,0x70,
+		0x80,0x90,0xa0,0xb0,0xc0,0xd0,0xe0,0xf0
+	}; /* AES data reduction key */
+	unsigned char xkey[16];	/* Material to XOR into the key */
+	int fd;
+	int i;
 
 	if (!x86_has_cpuid())
 		return 1;	/* No CPUID instruction */
@@ -244,13 +261,24 @@ int init_drng_entropy_source(struct rng *ent_src)
 
 	have_aesni = !!(info.ecx & features_ecx1_aesni);
 
-	/* Initialize the AES key */
+	/* Randomize the AES data reduction key the best we can */
+	if (!x86_rdrand_nlong(xkey, sizeof xkey/sizeof(long)))
+		return 1;
+
+	fd = open("/dev/urandom", O_RDONLY);
+	if (fd >= 0) {
+		read(fd, key, sizeof key);
+		close(fd);
+	}
+
+	for (i = 0; i < sizeof key; i++)
+		key[i] ^= xkey[i];
 
 	/* Initialize the IV buffer */
 	if (!x86_rdrand_nlong(iv_buf, CHUNK_SIZE/sizeof(long)))
 		return 1;
 
-	if (!have_aesni && init_gcrypt())
+	if (init_aesni(key) && init_gcrypt(key))
 		return 1;	/* We need one crypto or the other... */
 
 	src_list_add(ent_src);

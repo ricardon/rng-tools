@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Intel Corporation
+ * Copyright (c) 2011-2014, Intel Corporation
  * Authors: Fenghua Yu <fenghua.yu@intel.com>,
  *          H. Peter Anvin <hpa@linux.intel.com>
  *
@@ -166,32 +166,69 @@ ENTRY(x86_aes_mangle)
 #endif
 	ret
 ENDPROC(x86_aes_mangle)
-	/*
-	 * AES round keys for an arbitrary key:
-	 * 00102030405060708090A0B0C0D0E0F0
-	 */
-	.section ".rodata","a"
-	.balign	16
-aes_round_keys:
-	.long	0x30201000, 0x70605040, 0xB0A09080, 0xF0E0D0C0
-	.long	0x8AACF171, 0xFACCA131, 0x4A6C31B1, 0xBA8CE171
-	.long	0x2958958B, 0xD39434BA, 0x99F8050B, 0x2374E47A
-	.long	0xF37E07E6, 0x20EA335C, 0xB9123657, 0x9A66D22D
-	.long	0x2BC6345B, 0x0B2C0707, 0xB23E3150, 0x2858E37D
-	.long	0xD4F25E5A, 0xDFDE595D, 0x6DE0680D, 0x45B88B70
-	.long	0x859C3247, 0x5A426B1A, 0x37A20317, 0x721A8867
-	.long	0x00DC90C3, 0x5A9EFBD9, 0x6D3CF8CE, 0x1F2670A9
-	.long	0xD31C6712, 0x89829CCB, 0xE4BE6405, 0xFB9814AC
-	.long	0x421321F3, 0xCB91BD38, 0x2F2FD93D, 0xD4B7CD91
-	.long	0xC35B8878, 0x08CA3540, 0x27E5EC7D, 0xF35221EC
-	.size	aes_round_keys, .-aes_round_keys
+
+/* aeskeygenassist $imm,%xmm0,%xmm1 */
+#define AESKEYGENASSIST(imm) .byte 0x66,0x0f,0x3a,0xdf,0xc8,imm
+
+ENTRY(x86_aes_expand_key)
+#if defined(__i386__)
+	push	%ebp
+	mov	%esp, %ebp
+	movl	8(%ebp), %eax
+#endif
+
+	SETPTR(aes_round_keys, PTR1)
+	movdqu	(PTR0), %xmm0
+	movdqa	%xmm0, (PTR1)	/* First slot = the plain key */
+	add	$16, PTR1
+
+	AESKEYGENASSIST(0x01)
+	call	1f
+	AESKEYGENASSIST(0x02)
+	call	1f
+	AESKEYGENASSIST(0x04)
+	call	1f
+	AESKEYGENASSIST(0x08)
+	call	1f
+	AESKEYGENASSIST(0x10)
+	call	1f
+	AESKEYGENASSIST(0x20)
+	call	1f
+	AESKEYGENASSIST(0x40)
+	call	1f
+	AESKEYGENASSIST(0x80)
+	call	1f
+	AESKEYGENASSIST(0x1b)
+	call	1f
+	AESKEYGENASSIST(0x36)
+	call	1f
+
+#if defined(__i386__)
+	pop	%ebp
+#endif
+	ret
+
+1:
+	pshufd	$0xff, %xmm1, %xmm1
+	movdqa	%xmm0, %xmm2
+	pslldq	$4, %xmm2
+	pxor	%xmm2, %xmm0
+	pslldq	$4, %xmm2
+	pxor	%xmm2, %xmm0
+	pslldq	$4, %xmm2
+	pxor	%xmm2, %xmm0
+	pxor	%xmm1, %xmm0
+	movdqa	%xmm0, (PTR1)
+	add	$16, PTR1
+	ret
+
+ENDPROC(x86_aes_expand_key)
 
 	.bss
-	.balign 16
-aes_fwd_state:
-	.space	16
-	.size	aes_fwd_state, .-aes_fwd_state
-
+	.balign 64
+aes_round_keys:
+	.space	11*16
+	.size	aes_round_keys, .-aes_round_keys
 #endif /* i386 or x86_64 */
 
 /*
