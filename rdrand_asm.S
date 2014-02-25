@@ -18,6 +18,8 @@
  *
  */
 
+#if defined(__i386__) || defined(__x86_64__)
+
 #define ENTRY(x)	  \
 	.balign	64	; \
 	.globl	x	; \
@@ -29,7 +31,7 @@ x:
 
 #define RDRAND_RETRY_LIMIT	10
 
-#if defined(__x86_64__)
+#ifdef __x86_64__
 
 ENTRY(x86_rdrand_nlong)
 1:
@@ -92,10 +94,8 @@ ENDPROC(x86_rdrand_nlong)
 
 #endif
 
-#if defined(__i386__) || defined(__x86_64__)
-
 ENTRY(x86_aes_mangle)
-#if defined(__i386__)
+#ifdef __i386__
 	push	%ebp
 	mov	%esp, %ebp
 	movl	8(%ebp), %eax
@@ -161,7 +161,7 @@ ENTRY(x86_aes_mangle)
 	movdqa	%xmm6, (6*16)(PTR1)
 	movdqa	%xmm7, (7*16)(PTR1)
 
-#if defined(__i386__)
+#ifdef __i386__
 	pop	%ebp
 #endif
 	ret
@@ -171,7 +171,7 @@ ENDPROC(x86_aes_mangle)
 #define AESKEYGENASSIST(imm) .byte 0x66,0x0f,0x3a,0xdf,0xc8,imm
 
 ENTRY(x86_aes_expand_key)
-#if defined(__i386__)
+#ifdef __i386__
 	push	%ebp
 	mov	%esp, %ebp
 	movl	8(%ebp), %eax
@@ -203,7 +203,7 @@ ENTRY(x86_aes_expand_key)
 	AESKEYGENASSIST(0x36)
 	call	1f
 
-#if defined(__i386__)
+#ifdef __i386__
 	pop	%ebp
 #endif
 	ret
@@ -229,6 +229,7 @@ ENDPROC(x86_aes_expand_key)
 aes_round_keys:
 	.space	11*16
 	.size	aes_round_keys, .-aes_round_keys
+
 #endif /* i386 or x86_64 */
 
 /*
