@@ -33,23 +33,26 @@ x:
 
 #ifdef __x86_64__
 
-ENTRY(x86_rdrand_nlong)
+ENTRY(x86_rdrand_bytes)
+	mov	%esi, %eax
 1:
-	mov	$RDRAND_RETRY_LIMIT, %eax
+	mov	$RDRAND_RETRY_LIMIT, %ecx
 2:
 	.byte	0x48,0x0f,0xc7,0xf2	/* rdrand %rdx */
 	jnc	3f
 	mov	%rdx, (%rdi)
 	add	$8, %rdi
-	sub	$1, %esi
-	jnz	1b
+	sub	$8, %esi
+	ja	1b
+4:
+	sub	%esi, %eax
 	ret
 3:
-	sub	$1, %eax
+	dec	%ecx
 	rep;nop
 	jnz	2b
-	ret
-ENDPROC(x86_rdrand_nlong)
+	jmp	4b
+ENDPROC(x86_rdrand_bytes)
 
 #define SETPTR(var,ptr)	leaq var(%rip),ptr
 #define PTR0	%rdi
@@ -59,32 +62,36 @@ ENDPROC(x86_rdrand_nlong)
 
 #elif defined(__i386__)
 
-ENTRY(x86_rdrand_nlong)
+ENTRY(x86_rdrand_bytes)
 	push	%ebp
 	mov	%esp, %ebp
 	push	%edi
-	movl	8(%ebp), %ecx
-	movl	12(%ebp), %edx
+	push	%esi
+	movl	8(%ebp), %edi
+	movl	12(%ebp), %esi
+
+	mov	%esi, %eax
 1:
-	mov	$RDRAND_RETRY_LIMIT, %eax
+	mov	$RDRAND_RETRY_LIMIT, %ecx
 2:
-	.byte	0x0f,0xc7,0xf7		/* rdrand %edi */
+	.byte	0x0f,0xc7,0xf2		/* rdrand %edx */
 	jnc	3f
-	mov	%edi, (%ecx)
-	add	$4, %ecx
-	sub	$1, %edx
-	jnz	2b
+	mov	%edx, (%edi)
+	add	$4, %edi
+	sub	$4, %esi
+	ja	1b
+4:
+	sub	%esi, %eax
+	pop	%esi
 	pop	%edi
 	pop	%ebp
 	ret
 3:
-	sub	$1, %eax
+	dec	%ecx
 	rep;nop
 	jnz	2b
-	pop %edi
-	pop	%ebp
-	ret
-ENDPROC(x86_rdrand_nlong)
+	jmp	4b
+ENDPROC(x86_rdrand_bytes)
 
 #define SETPTR(var,ptr)	movl $(var),ptr
 #define PTR0	%eax

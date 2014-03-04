@@ -53,10 +53,18 @@ struct cpuid {
         uint32_t eax, ecx, edx, ebx;
 };
 
-/* Get data from RDRAND */
-extern int x86_rdrand_nlong(void *ptr, size_t count);
-/* Conditioning RDRAND for seed-grade entropy */
+/*
+ * Get data from RDRAND.  The count is in bytes, but the function can
+ * round *up* the count to the nearest 4- or 8-byte boundary.  The caller
+ * needs to take that into account.
+ *
+ * The function returns the number of bytes actually written.
+ */
+extern unsigned int x86_rdrand_bytes(void *ptr, unsigned int count);
+
+/* Condition RDRAND for seed-grade entropy */
 extern void x86_aes_mangle(void *data, void *state);
+
 /* Expand an AES key for future use */
 extern void x86_aes_expand_key(const void *key);
 
@@ -166,7 +174,7 @@ int xread_drng(void *buf, size_t size, struct rng *ent_src)
 
 	while (size) {
 		for (i = 0; i < rdrand_round_count; i++) {
-			if (!x86_rdrand_nlong(tmp, CHUNK_SIZE/sizeof(unative_t))) {
+			if (x86_rdrand_bytes(tmp, CHUNK_SIZE) != CHUNK_SIZE) {
 				message(LOG_DAEMON|LOG_ERR, "read error\n");
 				return -1;
 			}
@@ -268,7 +276,7 @@ int init_drng_entropy_source(struct rng *ent_src)
 	have_aesni = !!(info.ecx & features_ecx1_aesni);
 
 	/* Randomize the AES data reduction key the best we can */
-	if (!x86_rdrand_nlong(xkey, sizeof xkey/sizeof(unative_t)))
+	if (x86_rdrand_bytes(xkey, sizeof xkey) != sizeof xkey)
 		return 1;
 
 	fd = open("/dev/urandom", O_RDONLY);
@@ -281,7 +289,7 @@ int init_drng_entropy_source(struct rng *ent_src)
 		key[i] ^= xkey[i];
 
 	/* Initialize the IV buffer */
-	if (!x86_rdrand_nlong(iv_buf, CHUNK_SIZE/sizeof(unative_t)))
+	if (x86_rdrand_bytes(iv_buf, CHUNK_SIZE) != CHUNK_SIZE)
 		return 1;
 
 	if (init_aesni(key) && init_gcrypt(key))
