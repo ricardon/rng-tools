@@ -54,6 +54,37 @@ ENTRY(x86_rdrand_bytes)
 	jmp	4b
 ENDPROC(x86_rdrand_bytes)
 
+ENTRY(x86_rdseed_or_rdrand_bytes)
+	mov	(%rsi), %r8d		/* RDSEED count */
+	mov	(%rcx), %r9d		/* RDRAND count */
+1:
+	mov	$RDRAND_RETRY_LIMIT, %r10d
+2:
+	.byte	0x48,0x0f,0xc7,0xf8	/* rdseed %rax */
+	jnc	3f
+	mov	%rax, (%rdi)
+	add	$8, %rdi
+	sub	$8, %r8d
+	ja	1b
+4:
+	sub	%r8d, (%rsi)
+	sub	%r9d, (%rcx)
+	ret
+3:
+	.byte	0x48,0x0f,0xc7,0xf0	/* rdrand %rax */
+	jnc	5f
+	mov	%rax, (%rdx)
+	add	$8, %rdx
+	sub	$8, %r9d
+	ja	1b
+	jmp	4b
+5:
+	dec	%r10d
+	rep;nop
+	jnz	2b
+	jmp	4b
+ENDPROC(x86_rdseed_or_rdrand_bytes)
+
 #define SETPTR(var,ptr)	leaq var(%rip),ptr
 #define PTR0	%rdi
 #define PTR1	%rsi
@@ -93,6 +124,55 @@ ENTRY(x86_rdrand_bytes)
 	jnz	2b
 	jmp	4b
 ENDPROC(x86_rdrand_bytes)
+
+
+ENTRY(x86_rdseed_or_rdrand_bytes)
+	push	%ebp
+	mov	%esp, %ebp
+	push	%edi
+	push	%esi
+	push	%ebx
+
+	mov	12(%ebp), %ebx
+	mov	20(%ebp), %esi
+	mov	8(%ebp), %edi		/* RDSEED pointer */
+	mov	16(%ebp), %edx		/* RDRAND pointer */
+	mov	(%ebx), %ebx		/* RDSEED count */
+	mov	(%esi), %esi		/* RDRAND count */
+1:
+	mov	$RDRAND_RETRY_LIMIT, %ecx
+2:
+	.byte	0x0f,0xc7,0xf8		/* rdseed %eax */
+	jnc	3f
+	mov	%eax, (%edi)
+	add	$4, %edi
+	sub	$4, %ebx
+	ja	1b
+4:
+	mov	12(%ebp), %edx
+	mov	20(%ebp), %eax
+	sub	%ebx, (%edx)		/* RDSEED count */
+	sub	%esi, (%eax)		/* RDRAND count */
+
+	pop	%ebx
+	pop	%esi
+	pop	%edi
+	pop	%ebp
+	ret
+3:
+	.byte	0x0f,0xc7,0xf0		/* rdrand %eax */
+	jnc	5f
+	mov	%eax, (%edx)
+	add	$4, %edx
+	sub	$4, %esi
+	jnz	1b
+	ja	4b
+5:
+	dec	%ecx
+	rep;nop
+	jnz	2b
+	jmp	4b
+ENDPROC(x86_rdseed_or_rdrand_bytes)
 
 #define SETPTR(var,ptr)	movl $(var),ptr
 #define PTR0	%eax

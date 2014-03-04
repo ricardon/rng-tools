@@ -56,11 +56,19 @@ struct cpuid {
 /*
  * Get data from RDRAND.  The count is in bytes, but the function can
  * round *up* the count to the nearest 4- or 8-byte boundary.  The caller
- * needs to take that into account.
+ * needs to take that into account.  count must not be zero.
  *
  * The function returns the number of bytes actually written.
  */
 extern unsigned int x86_rdrand_bytes(void *ptr, unsigned int count);
+
+/*
+ * Get data from RDSEED (preferentially) or RDRAND into separate
+ * buffers.  Returns when either buffer is full.  Same conditions
+ * apply as for x86_rdrand_bytes().
+ */
+extern void x86_rdseed_or_rdrand_bytes(void *seed_ptr, unsigned int *seed_cnt,
+				       void *rand_ptr, unsigned int *rand_cnt);
 
 /* Condition RDRAND for seed-grade entropy */
 extern void x86_aes_mangle(void *data, void *state);
@@ -129,7 +137,7 @@ static void cpuid(unsigned int leaf, unsigned int subleaf, struct cpuid *out)
 #define RDRAND_ROUNDS		512		/* 512:1 data reduction */
 
 static unsigned char iv_buf[CHUNK_SIZE] __attribute__((aligned(128)));
-static int have_aesni;
+static int have_aesni, have_rdseed;
 
 /* Necessary if we have RDRAND but not AES-NI */
 
@@ -167,41 +175,63 @@ static inline int gcrypt_mangle(unsigned char *tmp)
 
 int xread_drng(void *buf, size_t size, struct rng *ent_src)
 {
+	static unsigned char rdrand_buf[CHUNK_SIZE * RDRAND_ROUNDS]
+		__attribute__((aligned(128)));
+	static unsigned int rdrand_bytes = 0;
+	unsigned char rdseed_buf[CHUNK_SIZE]
+		__attribute__((aligned(128)));
 	char *p = buf;
 	size_t chunk;
-	void *data;
-	unsigned char rdrand_buf[CHUNK_SIZE * RDRAND_ROUNDS]
-		__attribute__((aligned(128)));
-	unsigned int rand_bytes;
-	int i;
+	unsigned char *rdrand_ptr, *data;
+	unsigned int rand_bytes, seed_bytes;
 
 	(void)ent_src;
 
-	rand_bytes = have_aesni
-		? CHUNK_SIZE * RDRAND_ROUNDS
-		: AES_BLOCK * RDRAND_ROUNDS;
-
 	while (size) {
-		if (x86_rdrand_bytes(rdrand_buf, rand_bytes) != rand_bytes) {
-			message(LOG_DAEMON|LOG_ERR, "read error\n");
-			return -1;
+		rand_bytes = (have_aesni
+			      ? CHUNK_SIZE * RDRAND_ROUNDS
+			      : AES_BLOCK * RDRAND_ROUNDS)
+			- rdrand_bytes;
+
+		if (rand_bytes == 0) {
+			/* We already have a full rdrand_buf */
+			if (have_aesni) {
+				x86_aes_mangle(rdrand_buf, iv_buf);
+				data = iv_buf;
+				chunk = CHUNK_SIZE;
+			} else if (!gcrypt_mangle(rdrand_buf)) {
+				data = rdrand_buf +
+					AES_BLOCK * (RDRAND_ROUNDS - 1);
+				chunk = AES_BLOCK;
+			} else {
+				return -1;
+			}
+			rdrand_bytes = 0;
+			goto have_data;
 		}
 
-		/*
-		 * Use 128-bit AES in CBC mode to reduce the
-		 * data by a factor of RDRAND_ROUNDS
-		 */
-		if (have_aesni) {
-			x86_aes_mangle(rdrand_buf, iv_buf);
-			data = iv_buf;
-			chunk = CHUNK_SIZE;
-		} else if (!gcrypt_mangle(rdrand_buf)) {
-			data = rdrand_buf + AES_BLOCK * (RDRAND_ROUNDS - 1);
-			chunk = AES_BLOCK;
+		rdrand_ptr = rdrand_buf + rdrand_bytes;
+
+		if (have_rdseed) {
+			seed_bytes = sizeof rdseed_buf;
+			x86_rdseed_or_rdrand_bytes(rdseed_buf, &seed_bytes,
+						   rdrand_ptr, &rand_bytes);
 		} else {
-			return -1;
+			rand_bytes = x86_rdrand_bytes(rdrand_ptr, rand_bytes);
+			seed_bytes = 0;
 		}
 
+		rdrand_bytes += rand_bytes;
+
+		if (seed_bytes) {
+			data = rdseed_buf;
+			chunk = seed_bytes;
+			goto have_data;
+		}
+
+		continue;	/* No data ready yet */
+
+	have_data:
 		chunk = (chunk > size) ? size : chunk;
 		memcpy(p, data, chunk);
 		p += chunk;
@@ -269,6 +299,8 @@ int init_drng_entropy_source(struct rng *ent_src)
 	/* We need RDRAND, but AESni is optional */
 	const uint32_t features_ecx1_rdrand = 1 << 30;
 	const uint32_t features_ecx1_aesni  = 1 << 25;
+	const uint32_t features_ebx7_rdseed = 1 << 18;
+	uint32_t max_cpuid_leaf;
 	static unsigned char key[AES_BLOCK] = {
 		0x00,0x10,0x20,0x30,0x40,0x50,0x60,0x70,
 		0x80,0x90,0xa0,0xb0,0xc0,0xd0,0xe0,0xf0
@@ -281,13 +313,23 @@ int init_drng_entropy_source(struct rng *ent_src)
 		return 1;	/* No CPUID instruction */
 
 	cpuid(0, 0, &info);
-	if (info.eax < 1)
+	max_cpuid_leaf = info.eax;
+
+	if (max_cpuid_leaf < 1)
 		return 1;
+
 	cpuid(1, 0, &info);
 	if (!(info.ecx & features_ecx1_rdrand))
 		return 1;
 
 	have_aesni = !!(info.ecx & features_ecx1_aesni);
+
+	have_rdseed = 0;
+	if (max_cpuid_leaf >= 7) {
+		cpuid(7, 0, &info);
+		if (info.ebx & features_ebx7_rdseed)
+			have_rdseed = 1;
+	}
 
 	/* Randomize the AES data reduction key the best we can */
 	if (x86_rdrand_bytes(xkey, sizeof xkey) != sizeof xkey)
@@ -299,7 +341,7 @@ int init_drng_entropy_source(struct rng *ent_src)
 		close(fd);
 	}
 
-	for (i = 0; i < sizeof key; i++)
+	for (i = 0; i < (int)sizeof key; i++)
 		key[i] ^= xkey[i];
 
 	/* Initialize the IV buffer */
