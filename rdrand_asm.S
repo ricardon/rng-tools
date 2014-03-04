@@ -58,6 +58,7 @@ ENDPROC(x86_rdrand_bytes)
 #define PTR0	%rdi
 #define PTR1	%rsi
 #define PTR2	%rcx
+#define CTR3	%eax
 #define NPTR2	1	/* %rcx = %r1, only 0-7 valid here */
 
 #elif defined(__i386__)
@@ -97,6 +98,7 @@ ENDPROC(x86_rdrand_bytes)
 #define PTR0	%eax
 #define PTR1	%edx
 #define PTR2	%ecx
+#define CTR3	%esi
 #define NPTR2	1	/* %rcx = %r1 */
 
 #endif
@@ -107,27 +109,37 @@ ENTRY(x86_aes_mangle)
 	mov	%esp, %ebp
 	movl	8(%ebp), %eax
 	movl	12(%ebp), %edx
+	push	%esi
+#endif
+	movl	$512, CTR3	/* Number of rounds */
+	
+	movdqa	(0*16)(PTR1), %xmm0
+	movdqa	(1*16)(PTR1), %xmm1
+	movdqa	(2*16)(PTR1), %xmm2
+	movdqa	(3*16)(PTR1), %xmm3
+	movdqa	(4*16)(PTR1), %xmm4
+	movdqa	(5*16)(PTR1), %xmm5
+	movdqa	(6*16)(PTR1), %xmm6
+	movdqa	(7*16)(PTR1), %xmm7
+
+#ifdef __x86_64__
+	SETPTR(aes_round_keys, PTR2)
+1:
+#else
+1:
+	SETPTR(aes_round_keys, PTR2)
 #endif
 
-	SETPTR(aes_round_keys, PTR2)
-
-	movdqa	(0*16)(PTR0), %xmm0
-	movdqa	(1*16)(PTR0), %xmm1
-	movdqa	(2*16)(PTR0), %xmm2
-	movdqa	(3*16)(PTR0), %xmm3
-	movdqa	(4*16)(PTR0), %xmm4
-	movdqa	(5*16)(PTR0), %xmm5
-	movdqa	(6*16)(PTR0), %xmm6
-	movdqa	(7*16)(PTR0), %xmm7
-
-	pxor	(0*16)(PTR1), %xmm0
-	pxor	(1*16)(PTR1), %xmm1
-	pxor	(2*16)(PTR1), %xmm2
-	pxor	(3*16)(PTR1), %xmm3
-	pxor	(4*16)(PTR1), %xmm4
-	pxor	(5*16)(PTR1), %xmm5
-	pxor	(6*16)(PTR1), %xmm6
-	pxor	(7*16)(PTR1), %xmm7
+	/* 8192 = 512 (rounds) * 16 (bytes) */
+	pxor	(0*8192)(PTR0), %xmm0
+	pxor	(1*8192)(PTR0), %xmm1
+	pxor	(2*8192)(PTR0), %xmm2
+	pxor	(3*8192)(PTR0), %xmm3
+	pxor	(4*8192)(PTR0), %xmm4
+	pxor	(5*8192)(PTR0), %xmm5
+	pxor	(6*8192)(PTR0), %xmm6
+	pxor	(7*8192)(PTR0), %xmm7
+	add	$16, PTR0
 
 offset = 0
 	.rept 10
@@ -175,16 +187,9 @@ offset = offset + 16
 	.byte	0x66,0x0f,0x38,0xdd,0x30+NPTR2	/* aesenclast (PTR2), %xmm6 */
 	.byte	0x66,0x0f,0x38,0xdd,0x38+NPTR2	/* aesenclast (PTR2), %xmm7 */
 #endif
-
-	movdqa	%xmm0, (0*16)(PTR0)
-	movdqa	%xmm1, (1*16)(PTR0)
-	movdqa	%xmm2, (2*16)(PTR0)
-	movdqa	%xmm3, (3*16)(PTR0)
-	movdqa	%xmm4, (4*16)(PTR0)
-	movdqa	%xmm5, (5*16)(PTR0)
-	movdqa	%xmm6, (6*16)(PTR0)
-	movdqa	%xmm7, (7*16)(PTR0)
-
+	sub	$1, CTR3
+	jnz	1b
+	
 	movdqa	%xmm0, (0*16)(PTR1)
 	movdqa	%xmm1, (1*16)(PTR1)
 	movdqa	%xmm2, (2*16)(PTR1)
@@ -195,6 +200,7 @@ offset = offset + 16
 	movdqa	%xmm7, (7*16)(PTR1)
 
 #ifdef __i386__
+	pop	%esi
 	pop	%ebp
 #endif
 	ret

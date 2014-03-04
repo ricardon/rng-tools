@@ -124,7 +124,9 @@ static void cpuid(unsigned int leaf, unsigned int subleaf, struct cpuid *out)
 }
 
 /* Read data from the drng in chunks of 128 bytes for AES scrambling */
-#define CHUNK_SIZE		(16*8)
+#define AES_BLOCK		16
+#define CHUNK_SIZE		(AES_BLOCK*8)	/* 8 parallel streams */
+#define RDRAND_ROUNDS		512		/* 512:1 data reduction */
 
 static unsigned char iv_buf[CHUNK_SIZE] __attribute__((aligned(128)));
 static int have_aesni;
@@ -146,7 +148,8 @@ static inline int gcrypt_mangle(unsigned char *tmp)
 
 	/* Encrypt tmp in-place. */
 
-	gcry_error = gcry_cipher_encrypt(gcry_cipher_hd, tmp, CHUNK_SIZE,
+	gcry_error = gcry_cipher_encrypt(gcry_cipher_hd, tmp,
+					 AES_BLOCK * RDRAND_ROUNDS,
 					 NULL, 0);
 
 	if (gcry_error) {
@@ -166,30 +169,41 @@ int xread_drng(void *buf, size_t size, struct rng *ent_src)
 {
 	char *p = buf;
 	size_t chunk;
-	const int rdrand_round_count = 512;
-	unsigned char tmp[CHUNK_SIZE] __attribute__((aligned(128)));
+	void *data;
+	unsigned char rdrand_buf[CHUNK_SIZE * RDRAND_ROUNDS]
+		__attribute__((aligned(128)));
+	unsigned int rand_bytes;
 	int i;
 
 	(void)ent_src;
 
-	while (size) {
-		for (i = 0; i < rdrand_round_count; i++) {
-			if (x86_rdrand_bytes(tmp, CHUNK_SIZE) != CHUNK_SIZE) {
-				message(LOG_DAEMON|LOG_ERR, "read error\n");
-				return -1;
-			}
+	rand_bytes = have_aesni
+		? CHUNK_SIZE * RDRAND_ROUNDS
+		: AES_BLOCK * RDRAND_ROUNDS;
 
-			/*
-			 * Use 128-bit AES in CBC mode to reduce the
-			 * data by a factor of rdrand_round_count
-			 */
-			if (have_aesni)
-				x86_aes_mangle(tmp, iv_buf);
-			else if (gcrypt_mangle(tmp))
-				return -1;
+	while (size) {
+		if (x86_rdrand_bytes(rdrand_buf, rand_bytes) != rand_bytes) {
+			message(LOG_DAEMON|LOG_ERR, "read error\n");
+			return -1;
 		}
-		chunk = (sizeof(tmp) > size) ? size : sizeof(tmp);
-		memcpy(p, tmp, chunk);
+
+		/*
+		 * Use 128-bit AES in CBC mode to reduce the
+		 * data by a factor of RDRAND_ROUNDS
+		 */
+		if (have_aesni) {
+			x86_aes_mangle(rdrand_buf, iv_buf);
+			data = iv_buf;
+			chunk = CHUNK_SIZE;
+		} else if (!gcrypt_mangle(rdrand_buf)) {
+			data = rdrand_buf + AES_BLOCK * (RDRAND_ROUNDS - 1);
+			chunk = AES_BLOCK;
+		} else {
+			return -1;
+		}
+
+		chunk = (chunk > size) ? size : chunk;
+		memcpy(p, data, chunk);
 		p += chunk;
 		size -= chunk;
 	}
@@ -222,14 +236,14 @@ static int init_gcrypt(const void *key)
 				      GCRY_CIPHER_MODE_CBC, 0);
 
 	if (!gcry_error)
-		gcry_error = gcry_cipher_setkey(gcry_cipher_hd, key, 16);
+		gcry_error = gcry_cipher_setkey(gcry_cipher_hd, key, AES_BLOCK);
 
 	if (!gcry_error) {
 		/*
 		 * Only need the first 16 bytes of iv_buf. AES-NI can
 		 * encrypt multiple blocks in parallel but we can't.
 		 */
-		gcry_error = gcry_cipher_setiv(gcry_cipher_hd, iv_buf, 16);
+		gcry_error = gcry_cipher_setiv(gcry_cipher_hd, iv_buf, AES_BLOCK);
 	}
 
 	if (gcry_error) {
@@ -255,11 +269,11 @@ int init_drng_entropy_source(struct rng *ent_src)
 	/* We need RDRAND, but AESni is optional */
 	const uint32_t features_ecx1_rdrand = 1 << 30;
 	const uint32_t features_ecx1_aesni  = 1 << 25;
-	static unsigned char key[16] = {
+	static unsigned char key[AES_BLOCK] = {
 		0x00,0x10,0x20,0x30,0x40,0x50,0x60,0x70,
 		0x80,0x90,0xa0,0xb0,0xc0,0xd0,0xe0,0xf0
 	}; /* AES data reduction key */
-	unsigned char xkey[16];	/* Material to XOR into the key */
+	unsigned char xkey[AES_BLOCK];	/* Material to XOR into the key */
 	int fd;
 	int i;
 
