@@ -60,10 +60,16 @@ extern void x86_aes_mangle(void *data, void *state);
 /* Expand an AES key for future use */
 extern void x86_aes_expand_key(const void *key);
 
+#ifdef __x86_64__
+typedef uint64_t unative_t;	/* x86-64 or x32 */
+#else
+typedef uint32_t unative_t;	/* i386 */
+#endif
+
 /* Checking eflags to confirm cpuid instruction available */
-static inline int x86_has_eflag(unsigned long flag)
+static inline int x86_has_eflag(unative_t flag)
 {
-	unsigned long f0, f1;
+	unative_t f0, f1;
 	asm("pushf ; "
 	    "pushf ; "
 	    "pop %0 ; "
@@ -160,7 +166,7 @@ int xread_drng(void *buf, size_t size, struct rng *ent_src)
 
 	while (size) {
 		for (i = 0; i < rdrand_round_count; i++) {
-			if (!x86_rdrand_nlong(tmp, CHUNK_SIZE/sizeof(long))) {
+			if (!x86_rdrand_nlong(tmp, CHUNK_SIZE/sizeof(unative_t))) {
 				message(LOG_DAEMON|LOG_ERR, "read error\n");
 				return -1;
 			}
@@ -262,7 +268,7 @@ int init_drng_entropy_source(struct rng *ent_src)
 	have_aesni = !!(info.ecx & features_ecx1_aesni);
 
 	/* Randomize the AES data reduction key the best we can */
-	if (!x86_rdrand_nlong(xkey, sizeof xkey/sizeof(long)))
+	if (!x86_rdrand_nlong(xkey, sizeof xkey/sizeof(unative_t)))
 		return 1;
 
 	fd = open("/dev/urandom", O_RDONLY);
@@ -275,7 +281,7 @@ int init_drng_entropy_source(struct rng *ent_src)
 		key[i] ^= xkey[i];
 
 	/* Initialize the IV buffer */
-	if (!x86_rdrand_nlong(iv_buf, CHUNK_SIZE/sizeof(long)))
+	if (!x86_rdrand_nlong(iv_buf, CHUNK_SIZE/sizeof(unative_t)))
 		return 1;
 
 	if (init_aesni(key) && init_gcrypt(key))
