@@ -1,4 +1,13 @@
 
+Version 5 (April 1, 2014):
+* Support RDRAND capable systems that don't have AES-NI
+* Man page spelling fixes
+* Add BUGS document
+* Don't use fixed AES key for data reduction
+* Platform: Support x32. x86-64 micro-optimizations.
+* Fix RDRAND data reduction
+* Enable RDSEED instruction
+
 Version 4 (August 2, 2012):
 * Add RDRAND instruction support
 * Add -q and -v options for quiet and verbose output
