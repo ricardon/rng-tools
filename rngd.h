@@ -51,6 +51,7 @@ struct arguments {
 	bool daemon;
 	bool enable_drng;
 	bool enable_tpm;
+	int entropy_count;
 };
 extern struct arguments *arguments;
 

@@ -105,6 +105,8 @@ static struct argp_option options[] = {
 	{ "no-tpm", 'n', "1|0", 0,
 	  "Do not use tpm as a source of random number input (default: 0)" },
 
+	{ "entropy-count", 'e', "n", 0, "Number of entropy bits to support (default: 8), 1 <= n <= 8" },
+
 	{ 0 },
 };
 
@@ -117,6 +119,7 @@ static struct arguments default_arguments = {
 	.enable_tpm	= true,
 	.quiet		= false,
 	.verbose	= false,
+	.entropy_count	= 8,
 };
 struct arguments *arguments = &default_arguments;
 
@@ -195,7 +198,14 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
 			arguments->enable_tpm = false;
 		break;
 	}
-
+	case 'e': {
+		int e;
+		if ((sscanf(arg,"%i", &e) == 0) || (e < 0) || (e > 8))
+			argp_usage(state);
+		else
+			arguments->entropy_count = e;
+		break;
+	}
 	default:
 		return ARGP_ERR_UNKNOWN;
 	}

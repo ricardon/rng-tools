@@ -126,7 +126,7 @@ void random_add_entropy(void *buf, size_t size)
 		unsigned char data[size];
 	} entropy;
 
-	entropy.ent_count = size * 8;
+	entropy.ent_count = size * arguments->entropy_count;
 	entropy.size = size;
 	memcpy(entropy.data, buf, size);
 
